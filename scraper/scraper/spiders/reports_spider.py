@@ -1,10 +1,12 @@
 # run with `scrapy crawl il.healthinspections.us` from top scraper directory
 
-import urllib.parse
-import scrapy.exceptions
 import logging
-from scrapy.spiders import CrawlSpider, Rule
+import re
+import urllib.parse
+
+import scrapy.exceptions
 from scrapy.linkextractors import LinkExtractor
+from scrapy.spiders import CrawlSpider, Rule
 
 
 class ReportsSpider(CrawlSpider):
@@ -14,7 +16,9 @@ class ReportsSpider(CrawlSpider):
     # first search result page
     # TODO: parameterize the crawler to take an arbitrary start date
     # TODO: set the end date to today
-    start_urls = ['http://il.healthinspections.us/champaign/search.cfm?1=1&sd=01/01/2008&ed=06/04/2017&kw1=&kw2=&kw3=&rel1=A.organization_facility&rel2=A.organization_facility&rel3=A.organization_facility&zc=&dtRng=YES&pre=similar&lhd=all&riskCategory=all&asrTo=&asrFrom=&ncv=any']
+    start_urls = [('http://il.healthinspections.us/champaign/search.cfm?1=1&sd=01/01/2008&ed=06/04/2017&kw1=&kw2=&kw3='
+                   '&rel1=A.organization_facility&rel2=A.organization_facility&rel3=A.organization_facility&zc=&'
+                   'dtRng=YES&pre=similar&lhd=all&riskCategory=all&asrTo=&asrFrom=&ncv=any')]
     ref_url = None
 
     rules = (
@@ -29,6 +33,18 @@ class ReportsSpider(CrawlSpider):
         ),
     )
 
+    xpaths = {
+        'facility_name': '//div[@id="demographic"]/strong/text()',
+        'facility_address': '//div[@id="demographic"]/i/text()',
+        'inspection_date': '//table/tr/td/div[text()="Date:"]/parent::td/following-sibling::td/text()',
+        'critical_violations': ('//tr[preceding-sibling::tr/td[normalize-space(text())="Critical Violations:"] and '
+                                'following-sibling::tr/td[normalize-space(text())="Non-critical Violations:"]]/td[1]'
+                                '[text() != "Item"]/text()'),
+        'non_critical_violations': ('//tr[preceding-sibling::tr/td[normalize-space(text())="Non-critical Violations:"] '
+                                    'and following-sibling::tr/td[normalize-space(text())="Inspector Comments:"]]/td[1]'
+                                    '[text() != "Item"]/text()')
+    }
+
     # override to add the ref url in the meta data
     # I'll need this to link an inspection report to a facility id
     # could also use scrapy.utils.request.referer_str
@@ -39,13 +55,32 @@ class ReportsSpider(CrawlSpider):
             yield request_or_item
 
     def parse_facility_page(self, response):
-        # TODO: get the facility name and location
+        facility_id = self._get_parameter_value(response.url, 'facilityID')
+        self.logger.info('facility: {}'.format(facility_id))
+        facility_name = response.xpath(self.xpaths['facility_name']).extract_first()
+        if facility_name:
+            facility_name = facility_name.strip()
+            self.logger.info('facility name: {}'.format(facility_name))
+        facility_address_parts = response.xpath(self.xpaths['facility_address']).extract()
+        facility_address_parts = [p.strip() for p in facility_address_parts if p.strip()]
+        facility_address = ', '.join(facility_address_parts)
+        facility_address = re.sub(r'\s+', ' ', facility_address)
+        self.logger.info('facility address: {}'.format(facility_address))
         return
 
     def parse_inspection_report(self, response):
         facility_id = self._get_parameter_value(response.meta['ref_url'], 'facilityID')
         inspection_id = self._get_parameter_value(response.url, 'inspectionID')
         self.logger.info('facility: {}; inspection: {}'.format(facility_id, inspection_id))
+        inspection_date = response.xpath(self.xpaths['inspection_date']).extract_first()
+        if inspection_date:
+            inspection_date = inspection_date.strip()
+            # TODO: parse into an date object
+            self.logger.info('inspection date: {}'.format(inspection_date))
+        critical_violations = response.xpath(self.xpaths['critical_violations']).extract()
+        non_critical_violations = response.xpath(self.xpaths['non_critical_violations']).extract()
+        self.logger.info('critical violations: {}'.format(len(critical_violations)))
+        self.logger.info('non-critical violations: {}'.format(len(non_critical_violations)))
         # kill the crawl early for now
         raise scrapy.exceptions.CloseSpider('done')
 

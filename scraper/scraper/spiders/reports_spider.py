@@ -1,4 +1,6 @@
 # run with `scrapy crawl il.healthinspections.us` from top scraper directory
+# test scraping with e.g.
+#  `scrapy shell 'http://il.healthinspections.us/champaign/estab.cfm?facilityID=800' --set="ROBOTSTXT_OBEY=False"`
 
 import logging
 import re
@@ -55,32 +57,41 @@ class ReportsSpider(CrawlSpider):
             yield request_or_item
 
     def parse_facility_page(self, response):
+        # TODO: move processing to Item Pipeline
         facility_id = self._get_parameter_value(response.url, 'facilityID')
-        self.logger.info('facility: {}'.format(facility_id))
         facility_name = response.xpath(self.xpaths['facility_name']).extract_first()
         if facility_name:
             facility_name = facility_name.strip()
-            self.logger.info('facility name: {}'.format(facility_name))
         facility_address_parts = response.xpath(self.xpaths['facility_address']).extract()
         facility_address_parts = [p.strip() for p in facility_address_parts if p.strip()]
         facility_address = ', '.join(facility_address_parts)
         facility_address = re.sub(r'\s+', ' ', facility_address)
-        self.logger.info('facility address: {}'.format(facility_address))
+        # TODO: use Item class
+        yield {
+            'facility_id': int(facility_id),
+            'facility_name': facility_name,
+            'facility_address': facility_address
+        }
         return
 
     def parse_inspection_report(self, response):
+        # TODO: move processing to Item Pipeline
         facility_id = self._get_parameter_value(response.meta['ref_url'], 'facilityID')
         inspection_id = self._get_parameter_value(response.url, 'inspectionID')
-        self.logger.info('facility: {}; inspection: {}'.format(facility_id, inspection_id))
         inspection_date = response.xpath(self.xpaths['inspection_date']).extract_first()
         if inspection_date:
-            inspection_date = inspection_date.strip()
             # TODO: parse into an date object
-            self.logger.info('inspection date: {}'.format(inspection_date))
+            inspection_date = inspection_date.strip()
         critical_violations = response.xpath(self.xpaths['critical_violations']).extract()
         non_critical_violations = response.xpath(self.xpaths['non_critical_violations']).extract()
-        self.logger.info('critical violations: {}'.format(len(critical_violations)))
-        self.logger.info('non-critical violations: {}'.format(len(non_critical_violations)))
+        # TODO: use the Item class
+        yield {
+            'facility_id': int(facility_id),
+            'inspection_id': int(inspection_id),
+            'inspection_date': inspection_date,
+            'critical_violations': len(critical_violations),
+            'non_critical_violations': len(non_critical_violations)
+        }
         # kill the crawl early for now
         raise scrapy.exceptions.CloseSpider('done')
 

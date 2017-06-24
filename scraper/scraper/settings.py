@@ -88,3 +88,6 @@ COOKIES_ENABLED = False
 #HTTPCACHE_DIR = 'httpcache'
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
+FEED_FORMAT = 'jsonlines'
+FEED_URI = 'file:///tmp/scrapy_export.jsonl'

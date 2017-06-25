@@ -5,6 +5,7 @@
 import logging
 import re
 import urllib.parse
+from scraper.items import Facility, Inspection
 
 import scrapy.exceptions
 from scrapy.linkextractors import LinkExtractor
@@ -66,12 +67,11 @@ class ReportsSpider(CrawlSpider):
         facility_address_parts = [p.strip() for p in facility_address_parts if p.strip()]
         facility_address = ', '.join(facility_address_parts)
         facility_address = re.sub(r'\s+', ' ', facility_address)
-        # TODO: use Item class
-        yield {
-            'facility_id': int(facility_id),
-            'facility_name': facility_name,
-            'facility_address': facility_address
-        }
+        yield Facility(
+            facility_id=int(facility_id),
+            facility_name=facility_name,
+            facility_address=facility_address
+        )
         return
 
     def parse_inspection_report(self, response):
@@ -84,14 +84,13 @@ class ReportsSpider(CrawlSpider):
             inspection_date = inspection_date.strip()
         critical_violations = response.xpath(self.xpaths['critical_violations']).extract()
         non_critical_violations = response.xpath(self.xpaths['non_critical_violations']).extract()
-        # TODO: use the Item class
-        yield {
-            'facility_id': int(facility_id),
-            'inspection_id': int(inspection_id),
-            'inspection_date': inspection_date,
-            'critical_violations': len(critical_violations),
-            'non_critical_violations': len(non_critical_violations)
-        }
+        yield Inspection(
+            facility_id=int(facility_id),
+            inspection_id=int(inspection_id),
+            inspection_date=inspection_date,
+            critical_violations=len(critical_violations),
+            non_critical_violations=len(non_critical_violations)
+        )
         # kill the crawl early for now
         raise scrapy.exceptions.CloseSpider('done')
 

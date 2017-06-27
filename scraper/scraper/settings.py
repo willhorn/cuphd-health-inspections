@@ -91,3 +91,8 @@ COOKIES_ENABLED = False
 
 FEED_FORMAT = 'jsonlines'
 FEED_URI = 'file:///tmp/scrapy_export.jsonl'
+
+ITEM_PIPELINES = {
+    'scraper.pipelines.CleanUpPipeline': 100,
+    # 'scraper.pipelines.DuplicatesPipeline': 200,
+}

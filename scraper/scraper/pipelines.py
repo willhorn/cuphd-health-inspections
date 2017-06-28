@@ -5,7 +5,9 @@
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: http://doc.scrapy.org/en/latest/topics/item-pipeline.html
 
+import datetime
 import re
+
 from scrapy.exceptions import DropItem
 
 
@@ -25,7 +27,6 @@ class CleaningError(Error):
         self.drop = drop
 
 
-# TODO: CleanUpPipeline
 class CleanUpPipeline(object):
 
     def __init__(self):
@@ -48,7 +49,7 @@ class CleanUpPipeline(object):
                 cleaner = self._cleaners.get(field, self._unknown_field)
                 item[field] = cleaner(value)
             except CleaningError as e:
-                msg = "Failed to parse value `{}` for field `{}` using `{}`.".format(value, field, cleaner)
+                msg = "Failed to parse value `{}` for field `{}` using `{}`.".format(value, field, cleaner.__name__)
                 if e.drop:
                     raise DropItem(msg)
                 else:
@@ -80,8 +81,14 @@ class CleanUpPipeline(object):
         return address
 
     def _date_cleaner(self, value):
-        # TODO: parse into a date object
-        return self._string_cleaner(value)
+        if not re.fullmatch(r'\s*\d\d/\d\d/\d\d\s*', value):
+            raise CleaningError()
+        parts = [int(part) for part in value.strip().split('/')]
+        try:
+            date = datetime.date(2000 + parts[2], parts[0], parts[1])
+        except ValueError:
+            raise CleaningError()
+        return date
 
     def _violations_cleaner(self, value):
         # TODO: actually make entries for violations

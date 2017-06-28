@@ -100,4 +100,23 @@ class CleanUpPipeline(object):
         raise UnknownFieldError()
 
 
-# TODO: DuplicatesPipeline
+class DuplicatesPipeline(object):
+
+    def __init__(self):
+        # TODO: initialize this for incremental runs
+        self.ids_seen = {}
+
+    def process_item(self, item, spider):
+        item_class = item.__class__.__name__
+        id_field = item_class.lower() + '_id'
+
+        if item_class not in self.ids_seen:
+            self.ids_seen[item_class] = set()
+
+        if id_field not in item:
+            raise DropItem("Field {} not found in item {}.".format(id_field, item))
+        elif item[id_field] in self.ids_seen[item_class]:
+            raise DropItem("Duplicate {} found with ID {}".format(item_class, item[id_field]))
+        else:
+            self.ids_seen[item_class].add(item[id_field])
+            return item

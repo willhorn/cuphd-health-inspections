@@ -1,28 +1,26 @@
-# run with `scrapy crawl il.healthinspections.us` from top scraper directory
-# test scraping with e.g.
+# Run with `scrapy crawl il.healthinspections.us` from top scraper directory
+#  with optional options: `scrapy crawl il.healthinspections.us -a start_date=YYYY-MM-DD -a end_date=YYYY-MM-DD`
+# As detailed in my blog post, this date range functionality does not seem to work properly in the inspections
+#  database. However, I feel the work is still valuable and worth archiving.
+# Test scraping with e.g.
 #  `scrapy shell 'http://il.healthinspections.us/champaign/estab.cfm?facilityID=800' --set="ROBOTSTXT_OBEY=False"`
 
+import datetime
 import logging
+import re
 import urllib.parse
-from ..items import Facility, Inspection
 
 import scrapy.exceptions
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
+from ..items import Facility, Inspection
+
 
 class ReportsSpider(CrawlSpider):
-    logger = logging.getLogger('il.healthinspections.us')
     name = 'il.healthinspections.us'
+    logger = logging.getLogger('il.healthinspections.us')
     allowed_domains = ['il.healthinspections.us']
-    # first search result page
-    # TODO: parameterize the crawler to take an arbitrary start date
-    # TODO: set the end date to today
-    start_urls = [('http://il.healthinspections.us/champaign/search.cfm?1=1&sd=01/01/2008&ed=06/04/2017&kw1=&kw2=&kw3='
-                   '&rel1=A.organization_facility&rel2=A.organization_facility&rel3=A.organization_facility&zc=&'
-                   'dtRng=YES&pre=similar&lhd=all&riskCategory=all&asrTo=&asrFrom=&ncv=any')]
-    ref_url = None
-
     rules = (
         # search result pages
         Rule(LinkExtractor(allow='search\.cfm\?start=.+')),
@@ -34,7 +32,6 @@ class ReportsSpider(CrawlSpider):
             callback='parse_inspection_report'
         ),
     )
-
     xpaths = {
         'facility_name': '//div[@id="demographic"]/strong/text()',
         'facility_address': '//div[@id="demographic"]/i/text()',
@@ -46,6 +43,38 @@ class ReportsSpider(CrawlSpider):
                                     'and following-sibling::tr/td[normalize-space(text())="Inspector Comments:"]]/td[1]'
                                     '[text() != "Item"]/text()')
     }
+
+    def __init__(self, start_date=None, end_date=None,  *args, **kwargs):
+        super(ReportsSpider, self).__init__(*args, **kwargs)
+        self.start_date = self._parse_date_parameter('start_date', start_date)
+        self.end_date = self._parse_date_parameter('end_date', end_date)
+        # first search result page
+        start_url = ('http://il.healthinspections.us/champaign/search.cfm?1=1&sd={}&ed={}&kw1=&kw2=&kw3='
+                     '&rel1=A.organization_facility&rel2=A.organization_facility&rel3=A.organization_facility&zc='
+                     '&dtRng=YES&pre=similar&lhd=all&riskCategory=all&asrTo=&asrFrom=&ncv=any').format(
+            datetime.date.strftime(self.start_date, '%m/%d/%Y'),
+            datetime.date.strftime(self.end_date, '%m/%d/%Y')
+        )
+        self.start_urls = [start_url]
+        self.ref_url = None
+
+    def _parse_date_parameter(self, field, value):
+        if value is None:
+            if field == 'start_date':
+                return datetime.date(2008, 1, 1)
+            if field == 'end_date':
+                return datetime.date.today()
+            self.logger.error("No default value for available for '{}' parameter.".format(field))
+            exit(1)
+        if not re.fullmatch(r'\d{4}-\d\d-\d\d', value):
+            self.logger.error("'{}' parameter value '{}' does not match the format YYYY-MM-DD.".format(field, value))
+            exit(1)
+        try:
+            date_parts = [int(p) for p in value.split('-')]
+            return datetime.date(*date_parts)
+        except ValueError:
+            self.logger.error("'{}' parameter value '{}' is not a proper date.".format(field, value))
+            exit(1)
 
     # override to add the ref url in the meta data
     # I'll need this to link an inspection report to a facility id

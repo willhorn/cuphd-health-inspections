@@ -44,6 +44,9 @@ class ReportsSpider(CrawlSpider):
                                     '[text() != "Item"]/text()')
     }
 
+    # start_date and end_date define a time range for the most recent inspection
+    # only facilities for which the most recent inspection is in that time range will be returned
+    # both dates are inclusive
     def __init__(self, start_date=None, end_date=None,  *args, **kwargs):
         super(ReportsSpider, self).__init__(*args, **kwargs)
         self.start_date = self._parse_date_parameter('start_date', start_date)
